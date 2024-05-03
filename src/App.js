@@ -1,66 +1,88 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import "./App.css";
-import { Button, Card } from "react-bootstrap";
+import { Button, Card, Form } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
- 
+
 function App() {
-    // usetstate for storing and retrieving wallet details
-    const [data, setdata] = useState({
-        address: "",
-        Balance: null,
+    const initialData = {
+        address: localStorage.getItem("walletAddress") || "",
+        balance: localStorage.getItem("walletBalance") || null,
+    };
+
+    const [data, setData] = useState(initialData);
+    const [sendData, setSendData] = useState({
+        toAddress: "",
+        amount: "",
     });
- 
-    // Button handler button for handling a
-    // request event for metamask
-    const btnhandler = () => {
-        // Asking if metamask is already present or not
+
+    const btnHandler = () => {
         if (window.ethereum) {
-            // res[0] for fetching a first wallet
             window.ethereum
                 .request({ method: "eth_requestAccounts" })
-                .then((res) =>
-                    accountChangeHandler(res[0])
-                );
+                .then((res) => accountChangeHandler(res[0]));
         } else {
-            alert("install metamask extension!!");
+            alert("Please install MetaMask extension!");
         }
     };
- 
-    // getbalance function for getting a balance in
-    // a right format with help of ethers
-    const getbalance = (address) => {
-        // Requesting balance method
-        window.ethereum
-            .request({
-                method: "eth_getBalance",
-                params: [address, "latest"],
-            })
-            .then((balance) => {
-                // Setting balance
-                setdata({
-                    Balance:
-                        ethers.utils.formatEther(balance),
-                });
+
+    const getBalance = (address) => {
+        const provider = new ethers.providers.JsonRpcProvider("https://data-seed-prebsc-1-s1.binance.org:8545/");
+        provider.getBalance(address).then((balance) => {
+            const formattedBalance = ethers.utils.formatEther(balance);
+            setData({
+                ...data,
+                balance: formattedBalance,
             });
-    };
- 
-    // Function for getting handling all events
-    const accountChangeHandler = (account) => {
-        // Setting an address data
-        setdata({
-            address: account,
+            localStorage.setItem("walletBalance", formattedBalance);
         });
- 
-        // Setting a balance
-        getbalance(account);
     };
- 
+
+    const accountChangeHandler = (account) => {
+        setData({
+            address: account,
+            balance: null,
+        });
+        localStorage.setItem("walletAddress", account);
+
+        getBalance(account);
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setSendData({
+            ...sendData,
+            [name]: value,
+        });
+    };
+
+    const handleSend = async () => {
+        if (!sendData.toAddress || !sendData.amount) {
+            alert("Please enter recipient address and amount.");
+            return;
+        }
+
+        try {
+            const provider = new ethers.providers.JsonRpcProvider("https://data-seed-prebsc-1-s1.binance.org:8545/");
+            const signer = provider.getSigner();
+            const tx = await signer.sendTransaction({
+                to: sendData.toAddress,
+                value: ethers.utils.parseEther(sendData.amount),
+            });
+            await tx.wait();
+            alert("tBNB sent successfully on BNB Chain Testnet!");
+        } catch (error) {
+            alert("Failed to send tBNB on BNB Chain Testnet. Please try again.");
+        }
+    };
+
+    useEffect(() => {
+        if (data.address) {
+            getBalance(data.address);
+        }
+    }, []);
+
     return (
         <div className="App">
-            {/* Calling all values which we 
-       have stored in usestate */}
- 
             <Card className="text-center">
                 <Card.Header>
                     <strong>Address: </strong>
@@ -69,12 +91,30 @@ function App() {
                 <Card.Body>
                     <Card.Text>
                         <strong>Balance: </strong>
-                        {data.Balance}
+                        {data.balance !== null ? `${data.balance} tBNB` : "Loading..."}
                     </Card.Text>
-                    <Button
-                        onClick={btnhandler}
-                        variant="primary"
-                    >
+                    <Form.Group>
+                        <Form.Control
+                            type="text"
+                            placeholder="Enter recipient address"
+                            name="toAddress"
+                            value={sendData.toAddress}
+                            onChange={handleInputChange}
+                        />
+                    </Form.Group>
+                    <Form.Group>
+                        <Form.Control
+                            type="text"
+                            placeholder="Enter tBNB amount"
+                            name="amount"
+                            value={sendData.amount}
+                            onChange={handleInputChange}
+                        />
+                    </Form.Group>
+                    <Button onClick={handleSend} variant="primary">
+                        Send
+                    </Button>
+                    <Button onClick={btnHandler} variant="secondary">
                         Connect to wallet
                     </Button>
                 </Card.Body>
@@ -82,5 +122,5 @@ function App() {
         </div>
     );
 }
- 
+
 export default App;
